@@ -405,7 +405,7 @@ local function animateBtn(btn, visible)
     end
 end
 
--- Botão flutuante
+-- ⭐ BOTÃO FLUTUANTE APRIMORADO PARA MOBILE ⭐
 local TpFloatingBtn = Instance.new("TextButton", tpGui)
 TpFloatingBtn.Size = UDim2.new(0, 58, 0, 58)
 TpFloatingBtn.Position = UDim2.new(0.8, 0, 0.7, 0)
@@ -431,45 +431,90 @@ floatStroke.Thickness = 1.5
 floatStroke.Color = Color3.fromRGB(0, 240, 255)
 floatStroke.Transparency = 0.6
 
+-- 🔧 SISTEMA DE DRAG MELHORADO PARA MOBILE
 local isDragging = false
 local dragStartPos = nil
 local btnStartPos = nil
 local hasMoved = false
+local lastDragTime = 0
+local dragThreshold = 10 -- Threshold maior para evitar enganchões
+local clickThreshold = 0.25 -- Máximo de tempo (segundos) para considerar click
 
+-- Inicia o drag
 TpFloatingBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         isDragging = true
         hasMoved = false
         dragStartPos = input.Position
         btnStartPos = TpFloatingBtn.Position
+        lastDragTime = tick()
+        
+        -- Animação de press
         local curSize = TpFloatingBtn.Size.X.Offset
-        TweenService:Create(TpFloatingBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, curSize + 6, 0, curSize + 6)}):Play()
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                isDragging = false
-                TweenService:Create(TpFloatingBtn, TweenInfo.new(0.1), {Size = UDim2.new(0, 58, 0, 58)}):Play()
-            end
-        end)
+        TweenService:Create(TpFloatingBtn, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, curSize + 8, 0, curSize + 8),
+            BackgroundTransparency = 0.2
+        }):Play()
     end
 end)
 
+-- Detecta movimento durante drag
 TpFloatingBtn.InputChanged:Connect(function(input)
     if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
         local delta = input.Position - dragStartPos
-        if delta.Magnitude > 5 then hasMoved = true end
-        TpFloatingBtn.Position = UDim2.new(
-            btnStartPos.X.Scale, btnStartPos.X.Offset + delta.X,
-            btnStartPos.Y.Scale, btnStartPos.Y.Offset + delta.Y
-        )
+        local distance = math.sqrt(delta.X * delta.X + delta.Y * delta.Y)
+        
+        -- Só considera como "movimento" se ultrapassar o threshold
+        if distance > dragThreshold then
+            hasMoved = true
+        end
+        
+        -- Move o botão se estiver arrastando
+        if hasMoved then
+            TpFloatingBtn.Position = UDim2.new(
+                btnStartPos.X.Scale, btnStartPos.X.Offset + delta.X,
+                btnStartPos.Y.Scale, btnStartPos.Y.Offset + delta.Y
+            )
+        end
     end
 end)
 
+-- Finaliza o drag ou executa click
 TpFloatingBtn.InputEnded:Connect(function(input)
-    if not hasMoved and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-        isTeleportOpen = not isTeleportOpen
-        toggleMenu(isTeleportOpen)
+    if isDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        local elapsedTime = tick() - lastDragTime
+        
+        -- Restaura o tamanho
+        TweenService:Create(TpFloatingBtn, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 58, 0, 58),
+            BackgroundTransparency = 0.1
+        }):Play()
+        
+        -- Se não moveu significativamente E o tempo foi rápido = click
+        if not hasMoved and elapsedTime < clickThreshold then
+            isTeleportOpen = not isTeleportOpen
+            toggleMenu(isTeleportOpen)
+        elseif hasMoved then
+            -- Snap para posição válida (evita sair da tela e fica suave)
+            local screenSize = tpGui.AbsoluteSize
+            local btnSize = TpFloatingBtn.Size.X.Offset
+            local delta = input.Position - dragStartPos
+            
+            local newX = btnStartPos.X.Offset + delta.X
+            local newY = btnStartPos.Y.Offset + delta.Y
+            
+            -- Mantém dentro da tela com margem
+            newX = math.max(5, math.min(newX, screenSize.X - btnSize - 5))
+            newY = math.max(5, math.min(newY, screenSize.Y - btnSize - 5))
+            
+            TweenService:Create(TpFloatingBtn, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = UDim2.new(0, newX, 0, newY)
+            }):Play()
+        end
+        
+        isDragging = false
+        hasMoved = false
     end
-    hasMoved = false
 end)
 
 minimizeBtn.MouseButton1Click:Connect(function()
