@@ -1,9 +1,27 @@
 -- =============================================
 -- 🔥 SISTEMA DE TELEPORTE – MÓDULO DE TESTE
 -- =============================================
--- Certifique-se de que estas variáveis já existam no escopo:
---   Player, TweenService, CoreGui, RunService, Rayfield, TeleportTab
--- E que a função 'hover' esteja definida (está incluída abaixo).
+-- Validação e inicialização de variáveis globais
+local Player = game.Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Fallback para Rayfield se não existir
+local Rayfield = _G.Rayfield or nil
+local TeleportTab = _G.TeleportTab or nil
+
+-- Verificar se as variáveis críticas existem
+if not Player then
+    warn("❌ ERRO: LocalPlayer não encontrado!")
+    return
+end
+
+if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then
+    warn("⚠️ AVISO: Character ainda não carregou. Aguardando...")
+    Player.CharacterAdded:Wait()
+end
 
 local tpGui = Instance.new("ScreenGui", CoreGui)
 tpGui.Name = "WarcoreTeleporte"
@@ -254,7 +272,10 @@ local function refreshContainer()
             local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
             if root then
                 root.CFrame = CFrame.new(loc.x, loc.y, loc.z)
-                -- Rayfield:Notify pode ser omitido no teste isolado
+                -- Notificação opcional
+                if Rayfield and Rayfield.Notify then
+                    Rayfield:Notify({Title = "✅ Teleportado", Content = "Você foi para: " .. loc.name})
+                end
             end
         end)
     end
@@ -315,7 +336,12 @@ local function refreshContainer()
 end
 
 saveBtn.MouseButton1Click:Connect(function()
-    if inputName.Text == "" then return end
+    if inputName.Text == "" then
+        if Rayfield and Rayfield.Notify then
+            Rayfield:Notify({Title = "⚠️ Erro", Content = "Digite um nome para o local!"})
+        end
+        return
+    end
     local char = Player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     local pos = char.HumanoidRootPart.Position
@@ -323,15 +349,22 @@ saveBtn.MouseButton1Click:Connect(function()
     table.insert(savedLocations, {name = inputName.Text, x = x, y = y, z = z})
     inputName.Text = ""
     refreshContainer()
+    
+    if Rayfield and Rayfield.Notify then
+        Rayfield:Notify({Title = "💾 Salvo", Content = "Local salvo com sucesso!"})
+    end
 end)
 
 clearBtn.MouseButton1Click:Connect(function()
     savedLocations = {}
     refreshContainer()
+    if Rayfield and Rayfield.Notify then
+        Rayfield:Notify({Title = "🗑️ Limpo", Content = "Todos os locais foram removidos!"})
+    end
 end)
 
 -- Funções de animação
-function toggleMenu(show)
+local function toggleMenu(show)
     if show then
         tpFrame.Visible = true
         tpFrame.Size = UDim2.new(0, 0, 0, 540)
@@ -449,22 +482,28 @@ closeBtn.MouseButton1Click:Connect(function()
     toggleMenu(false)
 end)
 
--- Toggle principal (precisa de TeleportTab já criada)
-local teleportToggle = TeleportTab:CreateToggle({
-    Name = "Ativar Sistema de Teleporte",
-    CurrentValue = false,
-    Callback = function(value)
-        if value then
-            animateBtn(TpFloatingBtn, true)
-        else
-            animateBtn(TpFloatingBtn, false)
-            if isTeleportOpen then
-                isTeleportOpen = false
-                toggleMenu(false)
+-- Toggle principal (com fallback se TeleportTab não existir)
+if TeleportTab then
+    local teleportToggle = TeleportTab:CreateToggle({
+        Name = "Ativar Sistema de Teleporte",
+        CurrentValue = false,
+        Callback = function(value)
+            if value then
+                animateBtn(TpFloatingBtn, true)
+            else
+                animateBtn(TpFloatingBtn, false)
+                if isTeleportOpen then
+                    isTeleportOpen = false
+                    toggleMenu(false)
+                end
             end
         end
-    end
-})
+    })
+else
+    -- Se não há TeleportTab, mostra o botão por padrão
+    animateBtn(TpFloatingBtn, true)
+    print("✅ Sistema de Teleporte ativado! Use o botão 📍 para abrir o menu.")
+end
 
 -- Atualiza coordenadas em tempo real
 RunService.RenderStepped:Connect(function()
@@ -476,3 +515,5 @@ end)
 
 -- Exibe os locais fixos ao iniciar
 refreshContainer()
+
+print("✅ Script de Teleporte carregado com sucesso!")
